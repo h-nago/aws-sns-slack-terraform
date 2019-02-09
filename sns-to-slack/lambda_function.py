@@ -335,4 +335,3 @@ if __name__ == '__main__':
 }""")
     print('running locally')
     print(lambda_handler(sns_event_template, None))
-
