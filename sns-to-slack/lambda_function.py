@@ -127,6 +127,7 @@ def lambda_handler(event, context):
     sns = event['Records'][0]['Sns']
     print('DEBUG EVENT:', sns['Message'])
     json_msg = json.loads(sns['Message'])
+    notify = True
 
     if sns['Subject']:
         message = sns['Subject']
@@ -241,36 +242,62 @@ def lambda_handler(event, context):
                 "value": json_msg.get('detail').get('state')
             }]
         }]
+    elif json_msg.get('configRuleName'):
+        event_src = 'config'
+        message = json_msg.get('messageType')
+        new_evaluation_result = json_msg.get('newEvaluationResult')
+        event_cond = new_evaluation_result.get('complianceType')
+        color_map = {
+            'COMPLIANT': 'good',
+            'NON_COMPLIANT': 'danger'
+        }
+        evaluation_result_qualifier = new_evaluation_result.get('evaluationResultIdentifier').get('evaluationResultQualifier')
+        attachments = [{
+            'color': color_map[event_cond],
+            "fields": [{
+                "title": "Config rule name",
+                "value": evaluation_result_qualifier.get('configRuleName')
+            }, {
+                "title": "Resource type",
+                "value": evaluation_result_qualifier.get('resourceType')
+            }, {
+                "title": "Resource ID",
+                "value": evaluation_result_qualifier.get('resourceId')
+            }]
+        }]
+
     else:
         event_src = 'other'
+        notify = False
 
-    # SNS Topic ARN: arn:aws:sns:<REGION>:<AWS_ACCOUNT_ID>:<TOPIC_NAME>
-    #
-    # SNS Topic Names => Slack Channels
-    #  <env>-alerts => alerts-<region>
-    #  <env>-notices => events-<region>
-    #
-    region = sns['TopicArn'].split(':')[3]
-    topic_name = sns['TopicArn'].split(':')[-1]
-    # event_env = topic_name.split('-')[0]
-    # event_sev = topic_name.split('-')[1]
+    if notify:
+        # SNS Topic ARN: arn:aws:sns:<REGION>:<AWS_ACCOUNT_ID>:<TOPIC_NAME>
+        #
+        # SNS Topic Names => Slack Channels
+        #  <env>-alerts => alerts-<region>
+        #  <env>-notices => events-<region>
+        #
+        region = sns['TopicArn'].split(':')[3]
+        topic_name = sns['TopicArn'].split(':')[-1]
+        # event_env = topic_name.split('-')[0]
+        # event_sev = topic_name.split('-')[1]
 
-    # print('DEBUG:', topic_name, region, event_env, event_sev, event_src)
+        # print('DEBUG:', topic_name, region, event_env, event_sev, event_src)
 
-    WEBHOOK_URL = "https://" + config['webhook_url']
+        WEBHOOK_URL = "https://" + config['webhook_url']
 
-    channel_map = config['channel_map']
+        channel_map = config['channel_map']
 
-    payload = {
-        'text': message,
-        'channel': get_slack_channel(region, event_src, topic_name, channel_map),
-        'username': get_slack_username(event_src),
-        'icon_emoji': get_slack_emoji(event_src, topic_name, event_cond.lower())}
-    if attachments:
-        payload['attachments'] = attachments
-    print('DEBUG PAYLOAD:', json.dumps(payload))
-    r = requests.post(WEBHOOK_URL, json=payload)
-    return r.status_code
+        payload = {
+            'text': message,
+            'channel': get_slack_channel(region, event_src, topic_name, channel_map),
+            'username': get_slack_username(event_src),
+            'icon_emoji': get_slack_emoji(event_src, topic_name, event_cond.lower())}
+        if attachments:
+            payload['attachments'] = attachments
+        print('DEBUG PAYLOAD:', json.dumps(payload))
+        r = requests.post(WEBHOOK_URL, json=payload)
+        return r.status_code
 
 # Test locally
 if __name__ == '__main__':
@@ -308,3 +335,4 @@ if __name__ == '__main__':
 }""")
     print('running locally')
     print(lambda_handler(sns_event_template, None))
+
