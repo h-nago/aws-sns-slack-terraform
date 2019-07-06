@@ -7,7 +7,7 @@ resource "aws_lambda_function" "sns_to_slack" {
   function_name    = "${var.lambda_function_name}"
   role             = "${aws_iam_role.lambda_sns_to_slack.arn}"
   handler          = "lambda_function.lambda_handler"
-  source_code_hash = "${base64sha256(file("${path.module}/lambda/sns-to-slack.zip"))}"
+  source_code_hash = "${filebase64sha256("${path.module}/lambda/sns-to-slack.zip")}"
   runtime          = "python2.7"
 
   environment {
